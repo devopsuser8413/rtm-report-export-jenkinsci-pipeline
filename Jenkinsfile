@@ -42,6 +42,8 @@ pipeline {
         JIRA_BASE   = credentials('jira-base')
         JIRA_USER   = credentials('jira-user')
         JIRA_TOKEN  = credentials('jira-token')
+        JIRA_PROJECT_KEY = "${params.RTM_PROJECT}"
+        JIRA_EXECUTION_ID = "${params.TEST_EXECUTION}"
 
         // 🔹 Confluence API
         CONFLUENCE_BASE   = credentials('confluence-base')
@@ -89,7 +91,6 @@ pipeline {
             steps {
                 echo "📦 Setting up Python virtual environment..."
                 bat """
-                    echo.
                     if not exist %VENV_PATH% (
                         echo Creating virtual environment...
                         python -m venv %VENV_PATH%
@@ -107,10 +108,18 @@ pipeline {
         stage('Fetch RTM Data from Jira') {
             steps {
                 echo "📡 Fetching RTM Test Execution data from Jira REST API..."
-                bat """
-                    echo Running Jira RTM Data Fetch...
-                    %VENV_PATH%\\Scripts\\python scripts\\fetch_rtm_data.py
-                """
+                script {
+                    def result = bat(
+                        script: """
+                            echo Running Jira RTM Data Fetch...
+                            %VENV_PATH%\\Scripts\\python scripts\\fetch_rtm_data.py
+                        """,
+                        returnStatus: true
+                    )
+                    if (result != 0) {
+                        error("❌ Jira RTM data fetch failed. Check logs for details.")
+                    }
+                }
             }
         }
 
@@ -118,6 +127,7 @@ pipeline {
          * Stage 4: Generate HTML/PDF Report
          ***********************/
         stage('Generate HTML/PDF Report') {
+            when { expression { fileExists('data/rtm_data.json') } }
             steps {
                 echo "🧾 Generating RTM HTML and PDF reports..."
                 bat """
@@ -131,6 +141,7 @@ pipeline {
          * Stage 5: Publish to Confluence
          ***********************/
         stage('Publish to Confluence') {
+            when { expression { fileExists('report/report.html') } }
             steps {
                 echo "🌐 Publishing RTM report to Confluence space..."
                 bat """
@@ -144,6 +155,7 @@ pipeline {
          * Stage 6: Email Notification
          ***********************/
         stage('Send Email Notification') {
+            when { expression { fileExists('report/report.pdf') } }
             steps {
                 echo "📧 Sending RTM report via email..."
                 bat """
