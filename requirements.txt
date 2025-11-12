@@ -1,32 +1,51 @@
-# ======================================================================
-# 🧰 Requirements for RTM Test Execution Automation Pipeline
-# ----------------------------------------------------------------------
-# Covers:
-#   - Selenium (for RTM Cloud export)
-#   - Requests (for Confluence REST API)
-#   - Email utilities (built-in smtplib used, no external dep)
-#   - dotenv (optional env file handling for local testing)
-#   - fpdf2 (optional report generation or conversions)
-# ======================================================================
+# ================================================================
+# 🧾 RTM Automation – Full Pipeline Dependencies
+# ------------------------------------------------
+# Supports:
+#   1️⃣ fetch_rtm_data.py           (Jira RTM API integration)
+#   2️⃣ generate_rtm_report.py      (HTML/PDF report generation)
+#   3️⃣ confluence_publish.py       (Confluence REST API upload)
+#   4️⃣ send_email.py               (SMTP email notification)
+#   5️⃣ rtm_export_selenium.py      (optional – Selenium browser automation)
+#
+# Tested Environment:
+#   Python >= 3.10
+#   Jenkins Windows (java -jar jenkins.war)
+#   Chrome/Chromedriver >= 130.x
+# ================================================================
 
-# --- Core Dependencies ---
-requests==2.32.3               # REST API communication (Confluence, HTTP calls)
-selenium==4.24.0               # Web automation for RTM Cloud report export
-python-dotenv==1.0.1           # For optional local .env file support
-fpdf2==2.8.1                   # For any PDF generation (optional future use)
+# --------------------------
+# 🌐 HTTP / REST API Clients
+# --------------------------
+requests==2.32.3
+certifi>=2024.7.4
 
-# --- Utility Libraries ---
-charset-normalizer==3.4.0      # Dependency of requests
-certifi>=2024.7.4              # HTTPS certificates for secure connections
-urllib3==2.2.3                 # HTTP transport dependency
+# --------------------------
+# 📊 Data & Report Formatting
+# --------------------------
+tabulate==0.9.0
+fpdf2==2.8.1
 
-# --- Optional Windows-specific fixes ---
-# pillow==10.4.0               # Only if image embedding required in PDF
-# pywin32==306                 # Only if native Win32 COM integration needed
+# --------------------------
+# 🧠 Automation & Web Drivers
+# --------------------------
+selenium==4.38.0   # Used by rtm_export_selenium.py for browser-based RTM export
 
-# ======================================================================
-# ✅ Tested With:
-#   Python 3.10 / 3.11 / 3.12
-#   Chrome 127+ / ChromeDriver 127+
-#   Jenkins (Windows Agent)
-# ======================================================================
+# --------------------------
+# ⚙️ Spreadsheet Handling (optional)
+# --------------------------
+pandas==2.2.3
+openpyxl==3.1.5
+
+# --------------------------
+# 🧰 Utility Libraries
+# --------------------------
+typing_extensions>=4.10.0
+urllib3>=2.0.7
+
+# ================================================================
+# Notes:
+#   • Keep all dependencies pinned to ensure reproducible builds.
+#   • Use “python -m venv .venv && .venv\Scripts\pip install -r requirements.txt”
+#     when initializing Jenkins virtual environments.
+# ================================================================
