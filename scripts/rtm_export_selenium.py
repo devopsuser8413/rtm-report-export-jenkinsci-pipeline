@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-RTM Test Execution Report Export Automation (Stable Jenkins Edition)
+RTM Test Execution Report Export Automation (Jenkins-Stable Edition)
 --------------------------------------------------------------------
 Automates Jira RTM Test Execution report export to PDF.
 
-✅ Compatible with:
-  - Jenkins on Windows (launched via 'java -jar jenkins.war')
+✅ Designed for:
+  - Jenkins running on Windows (java -jar jenkins.war)
   - Chrome installed system-wide
-  - Headless execution for CI pipelines
+  - Headless execution using software rendering
 
 Author: DevOps Automation (RTM Report Export)
 """
@@ -23,9 +23,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-
 # ------------------------------------------------------------------------------
-# Environment Variables (provided by Jenkins)
+# Environment Variables (from Jenkins)
 # ------------------------------------------------------------------------------
 JIRA_USER = os.getenv("JIRA_USER")
 JIRA_PASS = os.getenv("JIRA_PASS")
@@ -34,13 +33,11 @@ PROJECT_KEY = os.getenv("RTM_PROJECT")
 TEST_EXEC = os.getenv("TEST_EXECUTION")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "report")
 
-
 # ------------------------------------------------------------------------------
 # Directory Setup
 # ------------------------------------------------------------------------------
 outdir = pathlib.Path(DOWNLOAD_DIR)
 outdir.mkdir(parents=True, exist_ok=True)
-
 
 # ------------------------------------------------------------------------------
 # Detect Chrome installation path
@@ -58,24 +55,24 @@ if not chrome_binary:
 
 print(f"[INFO] Chrome detected at: {chrome_binary}")
 
-
 # ------------------------------------------------------------------------------
-# Configure Chrome Options (stable headless mode for Jenkins)
+# Configure Chrome Options (Safe Headless Jenkins Mode)
 # ------------------------------------------------------------------------------
 options = Options()
 
-# 🧩 Core stability flags for Jenkins Windows environment
-options.add_argument("--headless=new")          # run headless
-options.add_argument("--no-sandbox")            # bypass OS sandbox
-options.add_argument("--disable-dev-shm-usage") # fix shared memory crash
-options.add_argument("--disable-gpu")           # disable GPU rendering
+# 🧩 Core stability flags for Jenkins Windows background mode
+options.add_argument("--headless=new")
+options.add_argument("--disable-gpu")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-software-rasterizer")
+options.add_argument("--single-process")
 options.add_argument("--disable-extensions")
-options.add_argument("--disable-popup-blocking")
 options.add_argument("--disable-background-networking")
 options.add_argument("--disable-client-side-phishing-detection")
 options.add_argument("--disable-component-update")
 options.add_argument("--disable-default-apps")
+options.add_argument("--disable-popup-blocking")
 options.add_argument("--disable-sync")
 options.add_argument("--no-first-run")
 options.add_argument("--no-service-autorun")
@@ -83,16 +80,22 @@ options.add_argument("--password-store=basic")
 options.add_argument("--use-mock-keychain")
 options.add_argument("--window-size=1920,1080")
 options.add_argument("--remote-debugging-port=9222")
-options.add_argument("--single-process")
-options.add_argument("--ignore-certificate-errors")
+options.add_argument("--enable-logging")
+options.add_argument("--v=1")
+options.add_argument("--force-device-scale-factor=1")
 
-# Optional: use Chrome profile (for SSO logins)
+# ✅ Force software rendering mode
+options.add_argument("--disable-features=VizDisplayCompositor,UseOzonePlatform,PlatformHEVCDecoderSupport")
+options.add_argument("--use-gl=swiftshader")
+options.add_argument("--use-angle=swiftshader")
+
+# Optional — Chrome profile (for SSO)
 options.add_argument(r"user-data-dir=C:\Users\I17270834\AppData\Local\Google\Chrome\User Data")
 
-# Set Chrome binary
+# Explicit binary
 options.binary_location = chrome_binary
 
-# Set download preferences
+# Preferences for auto-download
 prefs = {
     "download.default_directory": str(outdir.resolve()),
     "download.prompt_for_download": False,
@@ -104,21 +107,19 @@ options.add_experimental_option("prefs", prefs)
 
 print(f"[INFO] Chrome binary set to: {options.binary_location}")
 
-# Define ChromeDriver service path
+# ------------------------------------------------------------------------------
+# Start ChromeDriver
+# ------------------------------------------------------------------------------
 service = Service(r"C:\tools\chromedriver\chromedriver-win64\chromedriver.exe")
 
-
-# ------------------------------------------------------------------------------
-# Start Chrome
-# ------------------------------------------------------------------------------
 try:
     driver = webdriver.Chrome(service=service, options=options)
     wait = WebDriverWait(driver, 30)
-    print("[INFO] Chrome started successfully.")
+    print("[INFO] ✅ Chrome started successfully.")
 except Exception as e:
-    print(f"[ERROR] Chrome startup failed: {e}")
+    print(f"[ERROR] ❌ Chrome startup failed: {e}")
+    print("[HINT] Try disabling headless mode or running Jenkins interactively.")
     sys.exit(1)
-
 
 # ------------------------------------------------------------------------------
 # Jira Login and RTM Export
@@ -168,7 +169,6 @@ try:
             driver.save_screenshot(str(outdir / "sso_redirect.png"))
             print("[WARN] If using SSO, configure Chrome profile reuse via user-data-dir.")
             sys.exit(2)
-
     else:
         print(f"[INFO] Jira page title: {driver.title}")
 
@@ -180,7 +180,7 @@ try:
     driver.get(rtm_url)
     time.sleep(8)
 
-    # Fill fields
+    # Fill report fields
     driver.find_element(By.XPATH, "//input[@placeholder='Project key']").send_keys(PROJECT_KEY)
     driver.find_element(By.XPATH, "//input[@placeholder='Execution key']").send_keys(TEST_EXEC)
     time.sleep(1)
@@ -203,10 +203,10 @@ try:
     # --------------------------------------------------------------------------
     print(f"[INFO] Checking for downloaded PDF in '{DOWNLOAD_DIR}' ...")
     for f in outdir.glob("*.pdf"):
-        print(f"[SUCCESS] Report downloaded: {f}")
+        print(f"[SUCCESS] ✅ Report downloaded: {f}")
         sys.exit(0)
 
-    print("[ERROR] PDF not found after export.")
+    print("[ERROR] ❌ PDF not found after export.")
     driver.save_screenshot(str(outdir / "export_failed.png"))
     sys.exit(3)
 
