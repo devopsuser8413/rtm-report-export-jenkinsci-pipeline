@@ -1,16 +1,15 @@
 /************************************************************************************
- * 📘 RTM Report Export & Publishing Pipeline (Production-Ready)
+ * 📘 RTM Report Export & Publishing Pipeline
  * ----------------------------------------------------------------------------------
- * Fetches Jira RTM data via REST API, generates HTML/PDF reports,
+ * Fetches Jira RTM data via REST API, generates HTML/PDF report,
  * publishes to Confluence, and emails stakeholders.
  *
- * ✅ Headless (no Selenium/browser needed)
- * ✅ Works on Windows and Linux Jenkins agents
- * ✅ Uses modular Python scripts with isolated virtual environment
- * ✅ Secure credentials via Jenkins Credentials Store
- * ✅ UTF-8 safe for Windows console
+ * ✅ Fully headless (no Selenium or browser required)
+ * ✅ Works in Windows or Linux Jenkins agents
+ * ✅ Parameterized for remote trigger (Jira → Jenkins)
+ * ✅ Modular Python-based scripts with virtual environment
  *
- * Author: DevOpsUser8413
+ * Author : DevOpsUser8413
  * Version: 1.1.0
  ************************************************************************************/
 
@@ -18,32 +17,40 @@ pipeline {
     agent any
 
     /***************************************************************
-     * 🧭 Pipeline Options
+     * 🧭 Job Parameters (Enable Remote Trigger)
      ***************************************************************/
-    options {
-        timestamps()                   // Include timestamps in console logs
-        ansiColor('xterm')             // Enable colored output
-        disableConcurrentBuilds()      // Prevent parallel executions
-        buildDiscarder(logRotator(numToKeepStr: '15')) // keep last 15 builds
+    parameters {
+        string(name: 'RTM_PROJECT', defaultValue: 'RTM-DEMO', description: 'Jira RTM Project Key')
+        string(name: 'TEST_EXECUTION', defaultValue: 'RD-4', description: 'Jira RTM Test Execution Key')
+        string(name: 'token', defaultValue: 'rtm-trigger-token', description: 'Webhook trigger token for remote builds')
     }
 
     /***************************************************************
-     * 🌍 Global Environment Variables
+     * 🧰 Global Options
+     ***************************************************************/
+    options {
+        timestamps()          // Show build timestamps
+        ansiColor('xterm')    // Colored console output
+        disableConcurrentBuilds()
+    }
+
+    /***************************************************************
+     * 🌍 Environment Variables
      ***************************************************************/
     environment {
-        // 🧩 Jira Credentials
+        // 🔹 Jira API
         JIRA_BASE   = credentials('jira-base')
         JIRA_USER   = credentials('jira-user')
         JIRA_TOKEN  = credentials('jira-token')
 
-        // 🧩 Confluence Credentials
+        // 🔹 Confluence API
         CONFLUENCE_BASE   = credentials('confluence-base')
         CONFLUENCE_USER   = credentials('confluence-user')
         CONFLUENCE_TOKEN  = credentials('confluence-token')
         CONFLUENCE_SPACE  = 'DEMO'
         CONFLUENCE_TITLE  = 'RTM Test Execution Report'
 
-        // 🧩 SMTP Email Credentials
+        // 🔹 SMTP Email
         SMTP_HOST    = credentials('smtp-host')
         SMTP_PORT    = '587'
         SMTP_USER    = credentials('smtp-user')
@@ -51,12 +58,10 @@ pipeline {
         REPORT_FROM  = credentials('sender-email')
         REPORT_TO    = credentials('multi-receivers')
 
-        // 🧩 Project Metadata
-        RTM_PROJECT     = 'RTM-DEMO'
-        TEST_EXECUTION  = 'RD-4'
+        // 🔹 Python virtual environment path
         VENV_PATH       = '.venv'
 
-        // 🧩 UTF-8 Safe Python Environment
+        // 🔹 Encoding and runtime configuration
         PYTHONIOENCODING = 'utf-8'
         PYTHONUTF8 = '1'
         PYTHONLEGACYWINDOWSSTDIO = '1'
@@ -68,11 +73,11 @@ pipeline {
     stages {
 
         /***********************
-         * Stage 1: Checkout Source Code
+         * Stage 1: Checkout
          ***********************/
         stage('Checkout Source Code') {
             steps {
-                echo "🔍 Checking out repository from GitHub..."
+                echo "🔍 Checking out repository from Git..."
                 checkout scm
             }
         }
@@ -84,7 +89,12 @@ pipeline {
             steps {
                 echo "📦 Setting up Python virtual environment..."
                 bat """
-                    if not exist %VENV_PATH% python -m venv %VENV_PATH%
+                    echo.
+                    if not exist %VENV_PATH% (
+                        echo Creating virtual environment...
+                        python -m venv %VENV_PATH%
+                    )
+                    echo Upgrading pip and installing dependencies...
                     %VENV_PATH%\\Scripts\\python -m pip install --upgrade pip
                     %VENV_PATH%\\Scripts\\pip install -r requirements.txt
                 """
@@ -98,20 +108,20 @@ pipeline {
             steps {
                 echo "📡 Fetching RTM Test Execution data from Jira REST API..."
                 bat """
-                    chcp 65001
+                    echo Running Jira RTM Data Fetch...
                     %VENV_PATH%\\Scripts\\python scripts\\fetch_rtm_data.py
                 """
             }
         }
 
         /***********************
-         * Stage 4: Generate Report
+         * Stage 4: Generate HTML/PDF Report
          ***********************/
         stage('Generate HTML/PDF Report') {
             steps {
                 echo "🧾 Generating RTM HTML and PDF reports..."
                 bat """
-                    chcp 65001
+                    echo Generating reports...
                     %VENV_PATH%\\Scripts\\python scripts\\generate_rtm_report.py
                 """
             }
@@ -124,7 +134,7 @@ pipeline {
             steps {
                 echo "🌐 Publishing RTM report to Confluence space..."
                 bat """
-                    chcp 65001
+                    echo Uploading report to Confluence...
                     %VENV_PATH%\\Scripts\\python scripts\\confluence_publish.py
                 """
             }
@@ -135,9 +145,9 @@ pipeline {
          ***********************/
         stage('Send Email Notification') {
             steps {
-                echo "📧 Sending RTM report via SMTP email..."
+                echo "📧 Sending RTM report via email..."
                 bat """
-                    chcp 65001
+                    echo Sending email notification to stakeholders...
                     %VENV_PATH%\\Scripts\\python scripts\\send_email.py
                 """
             }
@@ -145,20 +155,19 @@ pipeline {
     }
 
     /***************************************************************
-     * 📦 Post-Build Cleanup and Notifications
+     * 📦 Post-Build Actions
      ***************************************************************/
     post {
         always {
-            echo "📘 Workspace: ${env.WORKSPACE}"
-            echo "🧹 Cleaning up temporary files..."
-            bat 'timeout /t 5' // Wait 5s to release file locks
+            echo "📘 Jenkins workspace: ${env.WORKSPACE}"
+            echo "🧹 Cleaning temporary files..."
             cleanWs()
         }
         success {
-            echo "✅ RTM Report Pipeline executed successfully!"
+            echo "✅ RTM Report Export & Publishing Pipeline completed successfully!"
         }
         failure {
-            echo "❌ RTM Report Pipeline failed. Check Jenkins console logs and export.out."
+            echo "❌ Pipeline failed. Check Jenkins console logs for detailed error output."
         }
     }
 }
