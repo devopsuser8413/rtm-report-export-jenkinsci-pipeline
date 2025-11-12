@@ -1,1 +1,0 @@
-# rtm-report-export-jenkinsci-pipeline
