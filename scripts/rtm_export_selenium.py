@@ -50,7 +50,7 @@ options.add_argument("--disable-extensions")
 options.add_argument("--ignore-certificate-errors")
 
 # ✅ Optional: uncomment this if your Jira uses SSO (reuses logged-in Chrome profile)
-# options.add_argument(r"user-data-dir=C:\Users\<YOUR_WINDOWS_USERNAME>\AppData\Local\Google\Chrome\User Data")
+options.add_argument(r"user-data-dir=C:\Users\I17270834\AppData\Local\Google\Chrome\User Data")
 
 prefs = {
     "download.default_directory": str(outdir.resolve()),
