@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # ==========================================================
 # 📘 fetch_rtm_data.py
-# Purpose: Fetch RTM Test Execution data from Jira using REST API (new /search/jql endpoint)
+# Purpose: Fetch RTM Test Execution data from Jira (Deviniti RTM API)
 # Author: devopsuser8413
-# Updated: 2025-11-12
+# Updated: 2025-11-13
 # ==========================================================
 
 import os
@@ -13,76 +13,64 @@ import requests
 from datetime import datetime
 
 # ----------------------------------------------------------
-# 🔧 Load Environment Variables from Jenkins Pipeline
+# 🔧 Load Environment Variables
 # ----------------------------------------------------------
-JIRA_BASE   = os.getenv("JIRA_BASE")
-JIRA_USER   = os.getenv("JIRA_USER")
-JIRA_TOKEN  = os.getenv("JIRA_TOKEN")
-PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY", "RTM-DEMO")
-EXECUTION_ID = os.getenv("JIRA_EXECUTION_ID", "RD-4")
-OUTPUT_FILE = "data/rtm_data.json"
+JIRA_BASE        = os.getenv("JIRA_BASE")
+JIRA_USER        = os.getenv("JIRA_USER")
+JIRA_TOKEN       = os.getenv("JIRA_TOKEN")
+PROJECT_KEY      = os.getenv("JIRA_PROJECT_KEY")
+EXECUTION_KEY    = os.getenv("JIRA_EXECUTION_ID")
+OUTPUT_FILE      = "data/rtm_data.json"
 
 # ----------------------------------------------------------
-# 🧭 Validate Environment
+# Validate
 # ----------------------------------------------------------
-missing = [var for var in ["JIRA_BASE", "JIRA_USER", "JIRA_TOKEN"] if not os.getenv(var)]
+missing = [v for v in ["JIRA_BASE", "JIRA_USER", "JIRA_TOKEN"] if not os.getenv(v)]
 if missing:
-    print(f"[ERROR] Missing required environment variable(s): {', '.join(missing)}")
-    sys.exit(3)
+    print(f"[ERROR] Missing environment variables: {missing}")
+    sys.exit(1)
 
 # ----------------------------------------------------------
-# 🌐 Jira API Configuration (New Endpoint)
+# 🌐 RTM for Jira API endpoint (Deviniti)
 # ----------------------------------------------------------
-API_ENDPOINT = f"{JIRA_BASE}/rest/api/3/search/jql"
+RTM_ENDPOINT = f"{JIRA_BASE}/rest/atm/1.0/testexecutions/{EXECUTION_KEY}/testRuns"
+
 HEADERS = {
-    "Accept": "application/json",
-    "Content-Type": "application/json"
+    "Accept": "application/json"
 }
 
 # ----------------------------------------------------------
-# 🔍 Build JQL Query
+# 🚀 Fetch RTM Test Execution Test Runs
 # ----------------------------------------------------------
-# Example: Fetch all Test Cases or Executions linked to a given execution ID
-JQL_QUERY = f'project = "{PROJECT_KEY}" AND issuekey = "{EXECUTION_ID}"'
-
-payload = {"jql": JQL_QUERY}
-
-# ----------------------------------------------------------
-# 🚀 Fetch Data from Jira API
-# ----------------------------------------------------------
-print("=" * 80)
-print("🗂️  Starting Jira RTM Data Fetch Process")
-print("=" * 80)
-print(f"[INFO] Fetching RTM data for Project '{PROJECT_KEY}' | Execution '{EXECUTION_ID}'")
-print(f"[INFO] Using Jira Endpoint: {API_ENDPOINT}")
+print("="*80)
+print("🗂️  Fetching RTM Test Execution results (Deviniti RTM API)")
+print("="*80)
+print(f"[INFO] Test Execution: {EXECUTION_KEY}")
+print(f"[INFO] Endpoint: {RTM_ENDPOINT}")
 
 try:
-    response = requests.post(
-        API_ENDPOINT,
+    response = requests.get(
+        RTM_ENDPOINT,
         headers=HEADERS,
-        auth=(JIRA_USER, JIRA_TOKEN),
-        json=payload
+        auth=(JIRA_USER, JIRA_TOKEN)
     )
 
-    if response.status_code == 200:
-        data = response.json()
-        issue_count = len(data.get("issues", []))
-        print(f"[SUCCESS] Retrieved {issue_count} issue(s) from Jira.")
-        print(f"[INFO] Writing RTM data to {OUTPUT_FILE}")
+    if response.status_code != 200:
+        print(f"[ERROR] API Error {response.status_code}: {response.text}")
+        sys.exit(2)
 
-        os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-        with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+    testRuns = response.json()
 
-        print(f"[INFO] Data saved successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        sys.exit(0)
+    print(f"[SUCCESS] Retrieved {len(testRuns)} test run(s).")
 
-    else:
-        print(f"[ERROR] Jira API returned {response.status_code}: {response.text}")
-        print("[ACTION] Please verify your Jira Cloud API URL and credentials, "
-              "or check Atlassian’s migration guide for the /search/jql API.")
-        sys.exit(3)
+    # Save JSON
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump({"testRuns": testRuns}, f, indent=4)
 
-except requests.exceptions.RequestException as e:
-    print(f"[EXCEPTION] Network or connection error: {e}")
+    print(f"[INFO] Data saved → {OUTPUT_FILE}")
+    sys.exit(0)
+
+except Exception as e:
+    print(f"[EXCEPTION] {e}")
     sys.exit(3)
