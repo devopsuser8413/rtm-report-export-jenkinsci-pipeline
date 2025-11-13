@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# ==========================================================
-# 📘 fetch_rtm_data.py
-# Purpose: Fetch RTM Test Execution data from Jira (Deviniti RTM API)
-# Author: devopsuser8413
-# Updated: 2025-11-13
-# ==========================================================
 
 import os
 import sys
@@ -12,65 +6,73 @@ import json
 import requests
 from datetime import datetime
 
-# ----------------------------------------------------------
-# 🔧 Load Environment Variables
-# ----------------------------------------------------------
-JIRA_BASE        = os.getenv("JIRA_BASE")
-JIRA_USER        = os.getenv("JIRA_USER")
-JIRA_TOKEN       = os.getenv("JIRA_TOKEN")
-PROJECT_KEY      = os.getenv("JIRA_PROJECT_KEY")
-EXECUTION_KEY    = os.getenv("JIRA_EXECUTION_ID")
-OUTPUT_FILE      = "data/rtm_data.json"
+JIRA_BASE = os.getenv("JIRA_BASE")
+JIRA_USER = os.getenv("JIRA_USER")
+JIRA_TOKEN = os.getenv("JIRA_TOKEN")
+EXECUTION_ID = os.getenv("JIRA_EXECUTION_ID")  # Example: RD-4
 
-# ----------------------------------------------------------
-# Validate
-# ----------------------------------------------------------
-missing = [v for v in ["JIRA_BASE", "JIRA_USER", "JIRA_TOKEN"] if not os.getenv(v)]
-if missing:
-    print(f"[ERROR] Missing environment variables: {missing}")
+OUTPUT_FILE = "data/rtm_data.json"
+
+if not all([JIRA_BASE, JIRA_USER, JIRA_TOKEN, EXECUTION_ID]):
+    print("Missing required environment variables.")
     sys.exit(1)
 
-# ----------------------------------------------------------
-# 🌐 RTM for Jira API endpoint (Deviniti)
-# ----------------------------------------------------------
-RTM_ENDPOINT = f"{JIRA_BASE}/rest/atm/1.0/testexecutions/{EXECUTION_KEY}/testRuns"
-
-HEADERS = {
+headers = {
     "Accept": "application/json"
 }
 
-# ----------------------------------------------------------
-# 🚀 Fetch RTM Test Execution Test Runs
-# ----------------------------------------------------------
-print("="*80)
-print("🗂️  Fetching RTM Test Execution results (Deviniti RTM API)")
-print("="*80)
-print(f"[INFO] Test Execution: {EXECUTION_KEY}")
-print(f"[INFO] Endpoint: {RTM_ENDPOINT}")
+# ------------------------------------------------------------------
+# STEP 1 — Fetch Test Execution
+# ------------------------------------------------------------------
+exec_url = f"{JIRA_BASE}/api/v2/test-execution/{EXECUTION_ID}"
 
-try:
-    response = requests.get(
-        RTM_ENDPOINT,
-        headers=HEADERS,
-        auth=(JIRA_USER, JIRA_TOKEN)
-    )
+print(f"[INFO] Fetching Test Execution: {exec_url}")
 
-    if response.status_code != 200:
-        print(f"[ERROR] API Error {response.status_code}: {response.text}")
-        sys.exit(2)
+resp = requests.get(exec_url, auth=(JIRA_USER, JIRA_TOKEN), headers=headers)
+if resp.status_code != 200:
+    print(f"[ERROR] Could not fetch Test Execution. {resp.status_code}: {resp.text}")
+    sys.exit(2)
 
-    testRuns = response.json()
+execution = resp.json()
 
-    print(f"[SUCCESS] Retrieved {len(testRuns)} test run(s).")
+# ------------------------------------------------------------------
+# STEP 2 — Fetch Test Case Executions inside this Test Execution
+# ------------------------------------------------------------------
+tces_url = f"{JIRA_BASE}/api/v2/test-execution/{EXECUTION_ID}/tces"
 
-    # Save JSON
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump({"testRuns": testRuns}, f, indent=4)
+print(f"[INFO] Fetching Test Case Executions: {tces_url}")
 
-    print(f"[INFO] Data saved → {OUTPUT_FILE}")
-    sys.exit(0)
-
-except Exception as e:
-    print(f"[EXCEPTION] {e}")
+resp_tces = requests.get(tces_url, auth=(JIRA_USER, JIRA_TOKEN), headers=headers)
+if resp_tces.status_code != 200:
+    print(f"[ERROR] Could not fetch Test Case Executions. {resp_tces.status_code}: {resp_tces.text}")
     sys.exit(3)
+
+tces = resp_tces.json()
+
+# ------------------------------------------------------------------
+# STEP 3 — Normalize Dataset for the Report Generator
+# ------------------------------------------------------------------
+issues = []
+
+for tce in tces.get("values", []):
+    issues.append({
+        "key": tce.get("key"),
+        "summary": tce.get("testCase", {}).get("name"),
+        "type": "Test Case Execution",
+        "priority": tce.get("priority", ""),
+        "assignee": tce.get("assignee", {}).get("displayName", "Unassigned"),
+        "status": tce.get("status", "")
+    })
+
+output = {
+    "execution": execution,
+    "issues": issues,
+    "fetched_at": datetime.now().isoformat()
+}
+
+os.makedirs("data", exist_ok=True)
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(output, f, indent=2)
+
+print(f"[SUCCESS] Saved RTM data → {OUTPUT_FILE}")
+sys.exit(0)
