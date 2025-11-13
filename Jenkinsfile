@@ -61,7 +61,7 @@ pipeline {
         REPORT_TO    = credentials('multi-receivers')
 
         // 🔹 Python virtual environment path
-        VENV_PATH       = '.venv'
+        VENV_PATH       = "C:\\Jenkins\\venvs\\rtm_rtm_pipeline"
 
         // 🔹 Encoding and runtime configuration
         PYTHONIOENCODING = 'utf-8'
@@ -89,15 +89,40 @@ pipeline {
          ***********************/
         stage('Setup Python Environment') {
             steps {
-                echo "📦 Setting up Python virtual environment..."
+                echo "⚡ Optimizing Python venv setup (with caching)..."
+
                 bat """
+                    REM -------- Step 1: Create venv only once --------
                     if not exist %VENV_PATH% (
-                        echo Creating virtual environment...
+                        echo Creating Python virtual environment for FIRST time...
                         python -m venv %VENV_PATH%
+                        echo Upgrading pip...
+                        %VENV_PATH%\\Scripts\\python -m pip install --upgrade pip
+                        echo Installing dependencies...
+                        %VENV_PATH%\\Scripts\\pip install -r requirements.txt
+                        echo Done.
+                        goto END
                     )
-                    echo Upgrading pip and installing dependencies...
-                    %VENV_PATH%\\Scripts\\python -m pip install --upgrade pip
-                    %VENV_PATH%\\Scripts\\pip install -r requirements.txt
+
+                    REM -------- Step 2: Check if requirements.txt changed --------
+                    if not exist .req.hash (
+                        echo NEW HASH FILE - computing...
+                        certutil -hashfile requirements.txt MD5 > .req.hash
+                        goto END
+                    )
+
+                    certutil -hashfile requirements.txt MD5 > .req.new
+                    fc .req.hash .req.new > nul
+                    if errorlevel 1 (
+                        echo Requirements changed! Reinstalling packages...
+                        %VENV_PATH%\\Scripts\\pip install -r requirements.txt
+                        move /Y .req.new .req.hash > nul
+                    ) else (
+                        echo Requirements unchanged — using cached venv. Fast!
+                        del .req.new
+                    )
+
+                    :END
                 """
             }
         }
@@ -141,7 +166,7 @@ pipeline {
          * Stage 5: Publish to Confluence
          ***********************/
         stage('Publish to Confluence') {
-           when { expression { fileExists('rtm_report.html') } }
+           when { expression { fileExists('rtm_report.html') || !findFiles(glob: 'rtm_report_*.html').isEmpty() } }
             steps {
                 echo "🌐 Publishing RTM report to Confluence space..."
                 bat """
@@ -155,7 +180,7 @@ pipeline {
          * Stage 6: Email Notification
          ***********************/
         stage('Send Email Notification') {
-           when { expression { fileExists('rtm_report.pdf') } }
+           when { expression { fileExists('rtm_report.pdf') || !findFiles(glob: 'rtm_report_*.pdf').isEmpty() } }
             steps {
                 echo "📧 Sending RTM report via email..."
                 bat """
